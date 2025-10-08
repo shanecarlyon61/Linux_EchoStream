@@ -488,14 +488,40 @@ int audio_output_callback(const void *input, void *output, unsigned long frames,
         unsigned long frames_filled = 0;
         pthread_mutex_lock(&global_shared_buffer.mutex);
         if (global_shared_buffer.valid && global_shared_buffer.sample_count > 0) {
+            // Copy audio from shared buffer to output with smooth interpolation
             unsigned long to_copy = global_shared_buffer.sample_count;
             if (to_copy > frames) to_copy = frames;
+            
+            // Apply gain boost and smooth interpolation to reduce choppiness
+            static float last_sample = 0.0f;
             for (unsigned long i = 0; i < to_copy; i++) {
-                out[i] = global_shared_buffer.samples[i];
+                float sample = global_shared_buffer.samples[i];
+                // Apply 3x gain boost (reduced from 5x to prevent distortion)
+                sample *= 3.0f;
+                // Clamp to prevent distortion
+                if (sample > 1.0f) sample = 1.0f;
+                if (sample < -1.0f) sample = -1.0f;
+                
+                // Smooth interpolation between last sample and current sample
+                if (i == 0 && last_sample != 0.0f) {
+                    sample = (last_sample + sample) * 0.5f; // Average with last sample
+                }
+                
+                out[i] = sample;
+                last_sample = sample;
             }
             frames_filled = to_copy;
             // do not invalidate; tone detection thread also reads; this is a tap
         } else {
+            // No audio data - use gradual fade to silence to reduce choppiness
+            static float fade_sample = 0.0f;
+            for (unsigned long i = 0; i < frames; i++) {
+                // Gradual fade to silence
+                fade_sample *= 0.95f; // Slow fade
+                out[i] = fade_sample;
+            }
+            frames_filled = frames;
+            
             // Debug: no audio data in shared buffer
             static int no_audio_count = 0;
             if (no_audio_count++ % 100 == 0) {
@@ -570,10 +596,14 @@ int audio_output_callback(const void *input, void *output, unsigned long frames,
                 audio_stream->current_output_frame_pos = 0;
             }
         } else {
-            // No frames available, fill with silence
+            // No frames available - use interpolation to reduce choppiness
+            static float last_sample = 0.0f;
             for (unsigned long i = frames_filled; i < frames; i++) {
-                out[i] = 0.0f;
+                // Gradual fade to silence instead of hard cut
+                float fade_factor = 1.0f - ((float)(i - frames_filled) / (float)(frames - frames_filled));
+                out[i] = last_sample * fade_factor;
             }
+            last_sample = out[frames - 1]; // Store last sample for next callback
             frames_filled = frames;
         }
     }
@@ -748,8 +778,8 @@ int setup_audio_for_channel(struct audio_stream* audio_stream) {
         return 0;
     }
     
-    // Setup buffers
-    audio_stream->buffer_size = 4800;
+    // Setup buffers with larger size for better buffering
+    audio_stream->buffer_size = 9600;  // Increased buffer size
     audio_stream->input_buffer = malloc(audio_stream->buffer_size * sizeof(float));
     audio_stream->input_buffer_pos = 0;
     audio_stream->current_output_frame_pos = 0;
