@@ -1086,6 +1086,7 @@ int start_transmission_for_channel(struct audio_stream* audio_stream) {
                 printf("[DEBUG] No default output device available, continuing with input-only mode for channel %s\n", audio_stream->channel_id);
                 audio_stream->output_stream = NULL;  // No output stream
                 err = paNoError;  // Continue with input-only mode
+            }
         }
     } else {
         printf("[DEBUG] Output stream created successfully for channel %s on device %d\n", 
