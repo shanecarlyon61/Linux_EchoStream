@@ -16,6 +16,7 @@ struct jitter_buffer {
     int write_index;
     int read_index;
     int frame_count;
+    int min_frames;  // Minimum frames required before playback to prevent underruns
     pthread_mutex_t mutex;
 };
 

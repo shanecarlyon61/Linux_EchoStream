@@ -1512,12 +1512,12 @@ void* udp_listener_worker(void* arg) {
                                         // Add new frame to buffer
                                         struct audio_frame *frame = &jitter->frames[jitter->write_index];
                                         
-                                        // Convert PCM to float and copy to frame (with gain boost)
+                                        // Convert PCM to float and copy to frame (with moderate gain boost)
                                         float max_sample = 0.0f;
                                         for (int j = 0; j < samples && j < SAMPLES_PER_FRAME; j++) {
                                             float sample = (float)pcm_data[j] / 32767.0f;
-                                            // Apply 10x gain boost for very quiet audio
-                                            sample *= 10.0f;
+                                            // Apply moderate 3x gain boost to prevent distortion
+                                            sample *= 3.0f;
                                             // Clamp to prevent distortion
                                             if (sample > 1.0f) sample = 1.0f;
                                             if (sample < -1.0f) sample = -1.0f;
@@ -1547,8 +1547,8 @@ void* udp_listener_worker(void* arg) {
                                         float max_sample = 0.0f;
                                         for (int j = 0; j < samples && j < SAMPLES_PER_FRAME; j++) {
                                             float sample = (float)pcm_data[j] / 32767.0f;
-                                            // Apply 10x gain boost for very quiet audio
-                                            sample *= 10.0f;
+                                            // Apply moderate 3x gain boost to prevent distortion
+                                            sample *= 3.0f;
                                             // Clamp to prevent distortion
                                             if (sample > 1.0f) sample = 1.0f;
                                             if (sample < -1.0f) sample = -1.0f;

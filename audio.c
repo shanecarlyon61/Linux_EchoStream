@@ -435,9 +435,9 @@ int audio_output_callback(const void *input, void *output, unsigned long frames,
     struct jitter_buffer *jitter = &audio_stream->output_jitter;
     
     static int callback_count = 0;
-    if (callback_count++ % 100000 == 0) {  // Even less frequent logging - about every 30 seconds
-        printf("Audio output callback called for channel %s (frames=%lu, buffer_count=%d)\n", 
-               audio_stream->channel_id, frames, jitter->frame_count);
+    if (callback_count++ % 10000 == 0) {  // More frequent logging to track buffer status
+        printf("Audio output callback for channel %s (frames=%lu, buffer_count=%d/%d, min_required=%d)\n", 
+               audio_stream->channel_id, frames, jitter->frame_count, JITTER_BUFFER_SIZE, jitter->min_frames);
     }
     
     // Check if this channel is the configured passthrough target
@@ -560,8 +560,8 @@ int audio_output_callback(const void *input, void *output, unsigned long frames,
     unsigned long frames_filled = 0;
     
     while (frames_filled < frames) {
-        // Check if we have a current frame to read from
-        if (jitter->frame_count > 0) {
+        // Check if we have enough frames to prevent underruns
+        if (jitter->frame_count >= jitter->min_frames) {
             struct audio_frame *current_frame = &jitter->frames[jitter->read_index];
             
             if (current_frame->valid) {
@@ -596,11 +596,21 @@ int audio_output_callback(const void *input, void *output, unsigned long frames,
                 audio_stream->current_output_frame_pos = 0;
             }
         } else {
-            // No frames available - use interpolation to reduce choppiness
+            // No frames available - use smooth interpolation to reduce choppiness
             static float last_sample = 0.0f;
+            static int underrun_count = 0;
+            underrun_count++;
+            
+            // Log underruns occasionally for debugging
+            if (underrun_count % 100 == 0) {
+                printf("[AUDIO] Buffer underrun for channel %s (count: %d)\n", 
+                       audio_stream->channel_id, underrun_count);
+            }
+            
             for (unsigned long i = frames_filled; i < frames; i++) {
-                // Gradual fade to silence instead of hard cut
+                // Smooth fade to silence with exponential decay
                 float fade_factor = 1.0f - ((float)(i - frames_filled) / (float)(frames - frames_filled));
+                fade_factor = fade_factor * fade_factor; // Exponential decay for smoother fade
                 out[i] = last_sample * fade_factor;
             }
             last_sample = out[frames - 1]; // Store last sample for next callback
@@ -779,7 +789,7 @@ int setup_audio_for_channel(struct audio_stream* audio_stream) {
     }
     
     // Setup buffers with larger size for better buffering
-    audio_stream->buffer_size = 9600;  // Increased buffer size
+    audio_stream->buffer_size = 19200;  // Doubled buffer size for smoother playback
     audio_stream->input_buffer = malloc(audio_stream->buffer_size * sizeof(float));
     audio_stream->input_buffer_pos = 0;
     audio_stream->current_output_frame_pos = 0;
@@ -793,6 +803,12 @@ int setup_audio_for_channel(struct audio_stream* audio_stream) {
         audio_stream->output_jitter.frames[i].valid = 0;
         audio_stream->output_jitter.frames[i].sample_count = 0;
     }
+    
+    // Set minimum buffer threshold to prevent underruns
+    audio_stream->output_jitter.min_frames = 2;  // Require at least 2 frames before playback
+    audio_stream->output_jitter.write_index = 0;
+    audio_stream->output_jitter.read_index = 0;
+    audio_stream->output_jitter.frame_count = 0;
     
     return 1;
 }
