@@ -141,4 +141,7 @@ int audio_output_callback(const void *input, void *output, unsigned long frames,
 // Tone detection integration
 void feed_audio_to_tone_detection(const float* samples, int sample_count);
 
+// Audio debugging functions
+void log_audio_stream_status(void);
+
 #endif // AUDIO_H

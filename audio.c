@@ -435,9 +435,9 @@ int audio_output_callback(const void *input, void *output, unsigned long frames,
     struct jitter_buffer *jitter = &audio_stream->output_jitter;
     
     static int callback_count = 0;
-    if (callback_count++ % 10000 == 0) {  // More frequent logging to track buffer status
-        printf("Audio output callback for channel %s (frames=%lu, buffer_count=%d/%d, min_required=%d)\n", 
-               audio_stream->channel_id, frames, jitter->frame_count, JITTER_BUFFER_SIZE, jitter->min_frames);
+    if (callback_count++ % 5000 == 0) {  // More frequent logging to track buffer status
+        printf("[AUDIO DEBUG] Channel %s: frames=%lu, buffer_count=%d/%d, min_required=%d, device=%d\n", 
+               audio_stream->channel_id, frames, jitter->frame_count, JITTER_BUFFER_SIZE, jitter->min_frames, audio_stream->device_index);
     }
     
     // Check if this channel is the configured passthrough target
@@ -602,9 +602,9 @@ int audio_output_callback(const void *input, void *output, unsigned long frames,
             underrun_count++;
             
             // Log underruns occasionally for debugging
-            if (underrun_count % 100 == 0) {
-                printf("[AUDIO] Buffer underrun for channel %s (count: %d)\n", 
-                       audio_stream->channel_id, underrun_count);
+            if (underrun_count % 50 == 0) {
+                printf("[AUDIO UNDERRUN] Channel %s: buffer empty (underrun count: %d, device: %d)\n", 
+                       audio_stream->channel_id, underrun_count, audio_stream->device_index);
             }
             
             for (unsigned long i = frames_filled; i < frames; i++) {
@@ -811,6 +811,40 @@ int setup_audio_for_channel(struct audio_stream* audio_stream) {
     audio_stream->output_jitter.frame_count = 0;
     
     return 1;
+}
+
+// Function to check and log audio stream status for debugging
+void log_audio_stream_status(void) {
+    printf("\n=== AUDIO STREAM STATUS ===\n");
+    for (int i = 0; i < MAX_CHANNELS; i++) {
+        if (channels[i].active) {
+            struct audio_stream* stream = &channels[i].audio;
+            struct jitter_buffer* jitter = &stream->output_jitter;
+            
+            printf("Channel %s (index %d):\n", stream->channel_id, i);
+            printf("  - Device: %d\n", stream->device_index);
+            printf("  - Input stream: %s\n", stream->input_stream ? "ACTIVE" : "INACTIVE");
+            printf("  - Output stream: %s\n", stream->output_stream ? "ACTIVE" : "INACTIVE");
+            printf("  - Buffer count: %d/%d (min required: %d)\n", 
+                   jitter->frame_count, JITTER_BUFFER_SIZE, jitter->min_frames);
+            printf("  - GPIO active: %d\n", stream->gpio_active);
+            printf("  - Transmitting: %d\n", stream->transmitting);
+            
+            // Check if input stream is actually running
+            if (stream->input_stream) {
+                int input_active = Pa_IsStreamActive(stream->input_stream);
+                printf("  - Input stream running: %s\n", input_active ? "YES" : "NO");
+            }
+            
+            // Check if output stream is actually running
+            if (stream->output_stream) {
+                int output_active = Pa_IsStreamActive(stream->output_stream);
+                printf("  - Output stream running: %s\n", output_active ? "YES" : "NO");
+            }
+            printf("\n");
+        }
+    }
+    printf("===========================\n\n");
 }
 
 int initialize_portaudio() {

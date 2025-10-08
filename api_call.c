@@ -1464,14 +1464,21 @@ void* udp_listener_worker(void* arg) {
                     }
                     
                     if (!target_stream) {
-                        printf("UDP Listener: No active channel found for '%s'\n", channel_id);
-                        printf("UDP Listener: Active channels: ");
+                        printf("[UDP ERROR] No active channel found for '%s'\n", channel_id);
+                        printf("[UDP ERROR] Active channels: ");
                         for (int i = 0; i < 4; i++) {
                             if (channels[i].active) {
                                 printf("'%s' ", channels[i].audio.channel_id);
                             }
                         }
                         printf("\n");
+                    } else {
+                        // Log successful channel match for debugging
+                        static int match_count = 0;
+                        if (match_count++ % 100 == 0) {
+                            printf("[UDP DEBUG] Audio data received for channel %s (match count: %d)\n", 
+                                   channel_id, match_count);
+                        }
                     }
                     
                     if (target_stream) {
@@ -1530,14 +1537,11 @@ void* udp_listener_worker(void* arg) {
                                         frame->sample_count = samples;
                                         frame->valid = 1;
                                         
-                                        printf("UDP: Audio frame queued for %s - %d samples, max level: %.4f\n", 
-                                               channel_id, samples, max_sample);
+                                        printf("[UDP AUDIO] Channel %s: frame queued - %d samples, max level: %.4f, buffer: %d/%d\n", 
+                                               channel_id, samples, max_sample, jitter->frame_count + 1, JITTER_BUFFER_SIZE);
                                         
                                         jitter->write_index = (jitter->write_index + 1) % JITTER_BUFFER_SIZE;
                                         jitter->frame_count++;
-                                        
-                                        printf("UDP: Audio queued for %s (buffer=%d)\n", 
-                                               channel_id, jitter->frame_count);
                                     } else {
                                         // Buffer full, drop oldest frame and add new one
                                         jitter->read_index = (jitter->read_index + 1) % JITTER_BUFFER_SIZE;
@@ -1564,7 +1568,8 @@ void* udp_listener_worker(void* arg) {
                                         jitter->write_index = (jitter->write_index + 1) % JITTER_BUFFER_SIZE;
                                         jitter->frame_count++;
                                         
-                                        printf("UDP: Buffer full, dropped frame for %s\n", channel_id);
+                                        printf("[UDP AUDIO] Channel %s: buffer full, dropped frame, buffer: %d/%d\n", 
+                                               channel_id, jitter->frame_count, JITTER_BUFFER_SIZE);
                                     }
                                     
                                     pthread_mutex_unlock(&jitter->mutex);
