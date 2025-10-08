@@ -231,6 +231,10 @@ void* gpio_monitor_worker(void* arg) {
             printf("PIN 18 (GPIO 24): %s (Channel: %s)\n", 
                    curr_val_18 == 0 ? "ACTIVE" : "INACTIVE", global_channel_ids[3]);
             printf("==========================================\n\n");
+            
+            // Also log audio stream status to help identify choppy audio issues
+            log_audio_stream_status();
+            
             status_counter = 0;
         }
 
